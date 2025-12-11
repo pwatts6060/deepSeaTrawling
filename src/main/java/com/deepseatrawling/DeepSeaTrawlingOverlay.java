@@ -1,13 +1,10 @@
 package com.deepseatrawling;
 
-import com.google.common.graph.Graph;
 import net.runelite.api.*;
 import net.runelite.api.Point;
-import net.runelite.client.config.Alpha;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
-import net.runelite.client.ui.overlay.OverlayPriority;
 import net.runelite.client.ui.overlay.OverlayUtil;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.coords.LocalPoint;
@@ -15,7 +12,6 @@ import net.runelite.client.ui.overlay.outline.ModelOutlineRenderer;
 
 import javax.inject.Inject;
 import java.awt.*;
-import java.util.Collection;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -47,42 +43,39 @@ public class DeepSeaTrawlingOverlay extends Overlay {
 
     @Override
     public Dimension render(Graphics2D graphics) {
-        for (ShoalData shoal : plugin.getShoals())
+        ShoalData shoal = plugin.getNearestShoal();
+        if(!plugin.trackedShoals.contains(shoal.getWorldViewId())) {
+            return null;
+        }
+
+        GameObject object = shoal.getShoalObject();
+        if (object == null)
         {
-            if(!plugin.isTypeEnabled(shoal.getSpecies())) {
-                continue;
+            LocalPoint localPoint = shoal.getCurrent();
+            if (localPoint != null) {
+                drawArea(graphics, localPoint, 3, Color.WHITE);
             }
+            return null;
+        }
 
-            GameObject object = shoal.getShoalObject();
-            if (object == null)
-            {
-                LocalPoint localPoint = shoal.getCurrent();
-                if (localPoint != null) {
-                    drawArea(graphics, localPoint, 3, Color.WHITE);
-                }
-                continue;
-            }
+        LocalPoint localLocation = object.getLocalLocation();
+        if (localLocation == null) {
+            return null;
+        }
 
-            LocalPoint localLocation = object.getLocalLocation();
-            if (localLocation == null) {
-                continue;
-            }
+        ObjectComposition composition = client.getObjectDefinition(object.getId());
+        if (composition == null) {
+            return null;
+        }
 
-            ObjectComposition composition = client.getObjectDefinition(object.getId());
-            if (composition == null) {
-                continue;
-            }
+        int sizeX = composition.getSizeX();
+        int sizeY = composition.getSizeY();
 
-            int sizeX = composition.getSizeX();
-            int sizeY = composition.getSizeY();
-
-            int size = Math.max(sizeX, sizeY);
-            if (size <= 0) {
-                size = 1;
-            }
-
-            //int plane = shoal.getWorldEntity().getWorldView().getPlane();
-
+        int size = Math.max(sizeX, sizeY);
+        if (size <= 0) {
+            size = 1;
+        }
+        if(plugin.trackedShoals.contains(shoal.getWorldViewId())) {
             Color baseColour = speciesColors.getOrDefault(shoal.getSpecies(), Color.WHITE);
 
             drawPath(graphics, shoal, baseColour);
@@ -90,7 +83,6 @@ public class DeepSeaTrawlingOverlay extends Overlay {
             drawStopSquares(graphics, shoal, 6, baseColour);
 
             drawArea(graphics, localLocation, size, baseColour);
-
         }
 
         return null;

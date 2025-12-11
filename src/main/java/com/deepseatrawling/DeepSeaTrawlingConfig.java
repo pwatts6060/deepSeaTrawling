@@ -69,6 +69,7 @@ public interface DeepSeaTrawlingConfig extends Config
 		return true;
 	}
 
+	/*
 	@ConfigItem(
 			keyName = "showShimmering",
 			name = "Show Shimmering Shoals",
@@ -98,7 +99,7 @@ public interface DeepSeaTrawlingConfig extends Config
 	{
 		return true;
 	}
-
+*/
 	@ConfigItem(
 			keyName = "dumpLogs",
 			name = "Dump Logs",
