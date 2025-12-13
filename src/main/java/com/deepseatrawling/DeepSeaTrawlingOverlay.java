@@ -84,11 +84,11 @@ public class DeepSeaTrawlingOverlay extends Overlay {
 
             drawPath(graphics, shoal, baseColour);
 
-            drawStopSquares(graphics, shoal, 6, baseColour);
+            drawStopSquares(graphics, shoal, size, baseColour);
 
             drawArea(graphics, localLocation, size, baseColour);
 
-            drawDepthLabel(graphics, shoal);
+            drawDepthLabel(graphics, shoal, size);
         }
 
         return null;
@@ -225,7 +225,7 @@ public class DeepSeaTrawlingOverlay extends Overlay {
         graphics.fillPolygon(xs, ys, 3);
     }
 
-    private void drawDepthLabel(Graphics2D graphic, ShoalData shoal)
+    private void drawDepthLabel(Graphics2D graphic, ShoalData shoal, int sizeTiles)
     {
         ShoalData.shoalDepth depth = shoal.getDepth();
         String text;
@@ -244,29 +244,38 @@ public class DeepSeaTrawlingOverlay extends Overlay {
             case DEEP:
                 text = "DEEP";
                 textColour = new Color(200, 60, 60);
+                break;
             default:
                 text = "?";
                 textColour = Color.GRAY;
         }
 
-        LocalPoint localPoint = shoal.getCurrent();
-        if (localPoint == null) {
+        GameObject object = shoal.getShoalObject();
+        if (object == null) {
             return;
         }
 
-        int plane = shoal.getWorldEntity().getWorldView().getPlane();
-        Point point = Perspective.localToCanvas(client, localPoint, plane);
-        if (point == null) {
+        LocalPoint centralPoint = object.getLocalLocation();
+        if (centralPoint == null) {
             return;
         }
+
+        Polygon poly = Perspective.getCanvasTilePoly(client, centralPoint, sizeTiles);
+        if (poly == null) {
+            return;
+        }
+
+        Rectangle bounds = poly.getBounds();
+        int anchorX = bounds.x + bounds.width / 2;
+        int anchorY = bounds.y;
 
         graphic.setFont(graphic.getFont().deriveFont(Font.BOLD, 16f));
         FontMetrics metrics = graphic.getFontMetrics();
         int width = metrics.stringWidth(text);
         int height = metrics.getHeight();
 
-        int x = point.getX() - width / 2;
-        int y = point.getY() - 40;
+        int x = anchorX - width / 2;
+        int y = anchorY - 8;
 
         graphic.setColor(new Color(0,0,0,140));
         graphic.fillRoundRect(x - 3, y - height, width + 6, height, 6, 6);
