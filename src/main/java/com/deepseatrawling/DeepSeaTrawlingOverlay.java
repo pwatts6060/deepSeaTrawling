@@ -28,7 +28,6 @@ public class DeepSeaTrawlingOverlay extends Overlay {
         this.client = client;
         this.plugin = plugin;
         setPosition(OverlayPosition.DYNAMIC);
-        setPriority(5f);
         setLayer(OverlayLayer.ABOVE_SCENE);
 
         speciesColors.put(ShoalData.shoalSpecies.GIANT_KRILL, new Color(255, 150, 150));
@@ -83,7 +82,7 @@ public class DeepSeaTrawlingOverlay extends Overlay {
             {
                 drawPath(graphics, shoal, new Color(0,204,255));
             } else {
-                drawPath(graphics, shoal, new Color(0,102,153));
+                drawPath(graphics, shoal, new Color(0,51,102));
             }
             drawStopSquares(graphics, shoal, size, baseColour);
 

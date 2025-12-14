@@ -188,18 +188,18 @@ public class DeepSeaTrawling extends Plugin
 
 		int id = obj.getId();
 
-		if (isStarboardNetObject(id))
+		if (client.getLocalPlayer().getWorldView() != null && obj.getWorldView() != null && client.getLocalPlayer().getWorldView() == obj.getWorldView())
 		{
-			netObjectByIndex[0] = obj;
-			return;
-		}
+			if (isStarboardNetObject(id)) {
+				netObjectByIndex[0] = obj;
+				return;
+			}
 
-		if (isPortNetObject(id))
-		{
-			netObjectByIndex[1] = obj;
-			return;
+			if (isPortNetObject(id)) {
+				netObjectByIndex[1] = obj;
+				return;
+			}
 		}
-
 		ShoalData.shoalSpecies species = ShoalData.shoalSpecies.fromGameObjectId(id);
 		if (species == null) {
 			return;
@@ -250,6 +250,9 @@ public class DeepSeaTrawling extends Plugin
 			if (msg.equals("You empty the nets into the cargo hold.")) {
 				fishQuantity = 0;
 				log.debug("Emptied nets");
+			} else if (msg.equals("You empty the net into the cargo hold.")) {
+				fishQuantity = 0;
+				log.debug("Emptied net");
 			}
 
 			if (msg.contains("You catch ") && !msg.contains("Trawler's Trust"))

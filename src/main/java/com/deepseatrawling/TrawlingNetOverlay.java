@@ -20,7 +20,6 @@ public class TrawlingNetOverlay extends Overlay {
         this.client = client;
         this.plugin = plugin;
         setPosition(OverlayPosition.DYNAMIC);
-        setPriority(5f);
         setLayer(OverlayLayer.ABOVE_SCENE);
     }
 

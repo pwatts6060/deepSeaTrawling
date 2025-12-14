@@ -16,6 +16,8 @@ public class DeepSeaTrawlingWidgetOverlay extends Overlay {
     private static final int SAILING_SIDEPANEL_GROUP = 937;
     private static final int FACILITIES_CONTENT_CLICKLAYER_CHILD = 25;
 
+    private static final int SKIFF_DOWN_INDEX = 29;
+    private static final int SKIFF_UP_INDEX = 30;
     private static final int STARBOARD_DOWN_INDEX = 41;
     private static final int STARBOARD_UP_INDEX = 42;
     private static final int PORT_DOWN_INDEX = 45;
@@ -36,7 +38,6 @@ public class DeepSeaTrawlingWidgetOverlay extends Overlay {
         this.plugin = plugin;
         setPosition(OverlayPosition.DYNAMIC);
         setLayer(OverlayLayer.ABOVE_WIDGETS);
-        setPriority(10f);
     }
 
     @Override
