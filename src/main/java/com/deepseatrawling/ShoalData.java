@@ -78,7 +78,6 @@ public class ShoalData {
 
     }
 
-
     public enum shoalDepth
     {
         SHALLOW,
@@ -101,7 +100,9 @@ public class ShoalData {
         }
     }
 
-    private shoalDepth depth = shoalDepth.UNKNOWN;
+    private NPC shoalNpc;
+
+    private shoalDepth depth;
     private EnumSet<shoalDepth> possibleDepths;
 
     private static final String RESOURCE_NAME = "shoals.properties";
@@ -128,6 +129,7 @@ public class ShoalData {
 
     public void setSpecies(shoalSpecies species) {
         this.species = species;
+        this.depth = species.defaultDepth();
         this.possibleDepths = EnumSet.copyOf(species.allowedDepths());
         if(possibleDepths.size() == 1) {
             this.depth = possibleDepths.iterator().next();
@@ -177,14 +179,6 @@ public class ShoalData {
         return current;
     }
 
-    public LocalPoint getNext() {
-        return next;
-    }
-
-    public WorldPoint getLast() {
-        return last;
-    }
-
     public void setCurrent(LocalPoint current) {
         this.current = current;
     }
@@ -205,12 +199,12 @@ public class ShoalData {
         return stopPoints;
     }
 
-    public void setWasMoving(boolean wasMoving) {
-        this.wasMoving = wasMoving;
-    }
-
     public boolean getWasMoving() {
         return wasMoving;
+    }
+
+    public void setShoalNpc(NPC shoalNpc) {
+        this.shoalNpc = shoalNpc;
     }
 
     private void load() throws IOException
@@ -274,6 +268,40 @@ public class ShoalData {
         int plane = Integer.parseInt(parts[2].trim());
 
         return new WorldPoint(x, y, plane);
+    }
+
+    public void setDepthFromAnimation()
+    {
+        if (shoalNpc == null)
+        {
+            this.depth = shoalDepth.UNKNOWN;
+        }
+        int animation = shoalNpc.getAnimation();
+        if (animation == -1)
+        {
+            return;
+        }
+
+        switch (animation)
+        {
+            case net.runelite.api.gameval.AnimationID.DEEP_SEA_TRAWLING_SHOAL_SHALLOW:
+                this.depth = shoalDepth.SHALLOW;
+                break;
+            case net.runelite.api.gameval.AnimationID.DEEP_SEA_TRAWLING_SHOAL_MID:
+                this.depth = shoalDepth.MEDIUM;
+                break;
+            case net.runelite.api.gameval.AnimationID.DEEP_SEA_TRAWLING_SHOAL_DEEP:
+                this.depth = shoalDepth.DEEP;
+                break;
+            default:
+                this.depth = shoalDepth.UNKNOWN;
+
+        }
+
+    }
+
+    public NPC getShoalNpc() {
+        return shoalNpc;
     }
 
 }

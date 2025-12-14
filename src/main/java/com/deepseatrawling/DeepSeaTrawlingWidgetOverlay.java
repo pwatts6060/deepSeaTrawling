@@ -2,6 +2,7 @@ package com.deepseatrawling;
 
 import lombok.Getter;
 import net.runelite.api.Client;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
@@ -19,9 +20,6 @@ public class DeepSeaTrawlingWidgetOverlay extends Overlay {
     private static final int STARBOARD_UP_INDEX = 42;
     private static final int PORT_DOWN_INDEX = 45;
     private static final int PORT_UP_INDEX = 46;
-
-    @Getter private Integer highlightNetIndex = null;
-    @Getter private Integer highlightDirection = null;
 
     private final Client client;
     private final DeepSeaTrawling plugin;
@@ -52,13 +50,10 @@ public class DeepSeaTrawlingWidgetOverlay extends Overlay {
                return null;
            }
 
-           for (int netIndex = 0; netIndex <= 1; netIndex++)
+           for (int netIndex = 0; netIndex < 2; netIndex++)
            {
-               int current = plugin.getNetDepthByIndex(netIndex);
-               if (current <= 0) {
-                   continue;
-               }
-               if (current == desired) {
+               int current = Net.NetDepth.asInt(plugin.netList[netIndex].getNetDepth());
+               if (current <= 0 || current == desired) {
                    continue;
                }
 
@@ -73,9 +68,16 @@ public class DeepSeaTrawlingWidgetOverlay extends Overlay {
     {
         Widget parent = client.getWidget(SAILING_SIDEPANEL_GROUP , FACILITIES_CONTENT_CLICKLAYER_CHILD);
         if (parent == null) return;
+        boolean hidden = false;
+        for (Widget widgetParent = parent; widgetParent != null; widgetParent = widgetParent.getParent())
+        {
+            if (widgetParent.isHidden()) {
+                hidden = true;
+            }
+        }
 
         int childId;
-        if (netIndex == 0) // you defined 0=starboard, 1=port in CrewAssignments
+        if (netIndex == 0)
             childId = direction == Direction.DOWN ? STARBOARD_DOWN_INDEX : STARBOARD_UP_INDEX;
         else if (netIndex == 1)
             childId = direction == Direction.DOWN ? PORT_DOWN_INDEX : PORT_UP_INDEX;
@@ -83,7 +85,7 @@ public class DeepSeaTrawlingWidgetOverlay extends Overlay {
             return;
 
         Widget button = parent.getChild(childId);
-        if (button == null || button.isHidden()) return;
+        if (button == null || button.isHidden() || button.getBounds().width <=0 || button.getBounds().height <= 0 || hidden || !client.getWidget(161,73).getBounds().intersects(button.getBounds())) return;
 
         Rectangle bounds = button.getBounds();
         if (bounds == null) return;

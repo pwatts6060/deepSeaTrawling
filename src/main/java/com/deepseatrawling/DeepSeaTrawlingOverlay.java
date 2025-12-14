@@ -63,9 +63,6 @@ public class DeepSeaTrawlingOverlay extends Overlay {
         }
 
         LocalPoint localLocation = object.getLocalLocation();
-        if (localLocation == null) {
-            return null;
-        }
 
         ObjectComposition composition = client.getObjectDefinition(object.getId());
         if (composition == null) {
@@ -82,8 +79,12 @@ public class DeepSeaTrawlingOverlay extends Overlay {
         if(plugin.trackedShoals.contains(shoal.getWorldViewId())) {
             Color baseColour = speciesColors.getOrDefault(shoal.getSpecies(), Color.WHITE);
 
-            drawPath(graphics, shoal, baseColour);
-
+            if (shoal.getSpecies() == ShoalData.shoalSpecies.SHIMMERING || shoal.getSpecies() == ShoalData.shoalSpecies.GLISTENING || shoal.getSpecies() == ShoalData.shoalSpecies.VIBRANT)
+            {
+                drawPath(graphics, shoal, new Color(0,204,255));
+            } else {
+                drawPath(graphics, shoal, new Color(0,102,153));
+            }
             drawStopSquares(graphics, shoal, size, baseColour);
 
             drawArea(graphics, localLocation, size, baseColour);
@@ -123,7 +124,7 @@ public class DeepSeaTrawlingOverlay extends Overlay {
         int plane = shoal.getWorldEntity().getWorldView().getPlane();
 
         path.setStroke(new BasicStroke(1.5f));
-        path.setColor(new Color(baseColour.getRed(), baseColour.getGreen(), baseColour.getBlue(), 180));
+        path.setColor(baseColour);
 
         int ARROW_EVERY_N_SEGMENTS = 5;
         for (int i = 0; i < points.size() - 1; i++)
@@ -151,7 +152,7 @@ public class DeepSeaTrawlingOverlay extends Overlay {
 
             if (i % ARROW_EVERY_N_SEGMENTS == 0)
             {
-                drawArrow(path, pointA, pointB, new Color(255 - baseColour.getRed(), 255 - baseColour.getGreen(), 255 - baseColour.getBlue(), 160));
+                drawArrow(path, pointA, pointB, baseColour);
             }
         }
     }
@@ -284,4 +285,5 @@ public class DeepSeaTrawlingOverlay extends Overlay {
         graphic.drawString(text, x, y);
 
     }
+
 }

@@ -8,6 +8,8 @@ import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.*;
+import net.runelite.api.gameval.NpcID;
+import net.runelite.api.gameval.ObjectID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.config.ConfigManager;
@@ -17,9 +19,14 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.api.ChatMessageType;
+import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
+import net.runelite.client.util.ImageUtil;
+import org.apache.commons.lang3.ArrayUtils;
 
 import javax.inject.Inject;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.util.*;
 
 
@@ -44,7 +51,15 @@ public class DeepSeaTrawling extends Plugin
 	private DeepSeaTrawlingWidgetOverlay widgetOverlay;
 
 	@Inject
+	private TrawlingNetOverlay trawlingNetOverlay;
+
+	@Inject
 	private OverlayManager overlayManager;
+
+	@Inject
+	private InfoBoxManager infoBoxManager;
+
+	private TrawlingNetInfoBox trawlingNetInfoBox;
 
 	public final Set<Integer> trackedShoals = new HashSet<>();
 	public final List<ShoalData.shoalSpecies> shoalTypes = List.of(
@@ -58,11 +73,6 @@ public class DeepSeaTrawling extends Plugin
 
 	private ShoalData nearestShoal;
 
-	private Player player;
-
-	private static final int PLAYER_HOTSPOT_NET_STARBOARD = 8;
-	private static final int PLAYER_HOTSPOT_NET_PORT = 9;
-
 	@Provides
 	DeepSeaTrawlingConfig provideConfig(ConfigManager configManager)
 	{
@@ -71,24 +81,24 @@ public class DeepSeaTrawling extends Plugin
 
 	private static final int SHOAL_WORLD_ENTITY_TYPE = 4;
 
-	private static final Map<Integer, Integer> CREW_VARBITS = ImmutableMap.<Integer, Integer>builder()
-			.put(VarbitID.SAILING_CREW_SLOT_1, VarbitID.SAILING_CREW_SLOT_1_POSITION)
-			.put(VarbitID.SAILING_CREW_SLOT_2, VarbitID.SAILING_CREW_SLOT_2_POSITION)
-			.put(VarbitID.SAILING_CREW_SLOT_3, VarbitID.SAILING_CREW_SLOT_3_POSITION)
-			.put(VarbitID.SAILING_CREW_SLOT_4, VarbitID.SAILING_CREW_SLOT_4_POSITION)
-			.put(VarbitID.SAILING_CREW_SLOT_5, VarbitID.SAILING_CREW_SLOT_5_POSITION)
-			.build();
-
-	private final Map<Integer, CrewAssignments> crewBySlot = new HashMap<>();
+	public Net[] netList = {
+			new Net(net.runelite.api.gameval.VarbitID.SAILING_SIDEPANEL_BOAT_TRAWLING_NET_0_DEPTH),
+			new Net(VarbitID.SAILING_SIDEPANEL_BOAT_TRAWLING_NET_1_DEPTH)
+	};
 
 	@Override
 	protected void startUp() throws Exception
 	{
 		overlayManager.add(overlay);
 		overlayManager.add(widgetOverlay);
+		overlayManager.add(trawlingNetOverlay);
+
+		BufferedImage icon = ImageUtil.loadImageResource(getClass(), "/icon.png");
+		trawlingNetInfoBox = new TrawlingNetInfoBox(icon, this);
+		infoBoxManager.addInfoBox(trawlingNetInfoBox);
+
 		nearestShoal = null;
 		rebuildTrackedShoals();
-		player = client.getLocalPlayer();
 		log.info("Deep Sea Trawling Plugin Started");
 
 	}
@@ -98,7 +108,15 @@ public class DeepSeaTrawling extends Plugin
 	{
 		overlayManager.remove(overlay);
 		overlayManager.remove(widgetOverlay);
+		overlayManager.remove(trawlingNetOverlay);
+
+		if (trawlingNetInfoBox != null) {
+			infoBoxManager.removeInfoBox(trawlingNetInfoBox);
+			trawlingNetInfoBox = null;
+		}
 		trackedShoals.clear();
+		netObjectByIndex[0] = null;
+		netObjectByIndex[1] = null;
 		log.info("Deep Sea Trawling Plugin Stopped");
 	}
 
@@ -106,7 +124,9 @@ public class DeepSeaTrawling extends Plugin
 		return nearestShoal;
 	}
 
-	public boolean netFull = false;
+	public final GameObject[] netObjectByIndex = new GameObject[2];
+
+	public int fishQuantity = 0;
 
 	@Subscribe
 	public void onWorldEntitySpawned(WorldEntitySpawned event) throws IOException {
@@ -124,18 +144,7 @@ public class DeepSeaTrawling extends Plugin
 
 		int worldViewId = view.getId();
 
-		ShoalData shoal = new ShoalData(worldViewId, entity);
-
-		/*LocalPoint current = entity.getLocalLocation();
-		data.setCurrent(current);
-		data.setNext(entity.getTargetLocation());
-		data.setLast(current);
-		if (current != null) {
-			data.getPathPoints().add(current);
-		}
-		 */
-
-		nearestShoal = shoal;
+		nearestShoal = new ShoalData(worldViewId, entity);
 
 		//debugging
 		log.debug("Registered shoal entity worldViewId={} typeId={}", worldViewId, cfg.getId());
@@ -144,18 +153,26 @@ public class DeepSeaTrawling extends Plugin
 	@Subscribe
 	public void onWorldEntityDespawned(WorldEntityDespawned event)
 	{
-		/*
-		WorldEntity entity = event.getWorldEntity();
-		WorldView view = entity.getWorldView();
-		if (view == null) {
-			;
-		}
+		//?
+	}
 
-		//int worldviewId = view.getId();
-		//ShoalData removed = trackedShoals.remove(worldviewId);
-		//if (removed != null) {
-		//	log.debug("Removed shoal entity worldViewId={}", worldviewId);
-		//}*/
+	@Subscribe
+	public void onNpcSpawned(NpcSpawned e)
+	{
+		if (e.getNpc().getId() == NpcID.SAILING_SHOAL_RIPPLES)
+		{
+			nearestShoal.setShoalNpc(e.getNpc());
+			nearestShoal.setDepthFromAnimation();
+		}
+	}
+
+	public void onNpcDespawned(NpcDespawned e)
+	{
+		if ( nearestShoal.getShoalNpc() == e.getNpc() )
+		{
+			nearestShoal.setShoalNpc(null);
+			nearestShoal.setDepth(ShoalData.shoalDepth.UNKNOWN);
+		}
 	}
 
 	@Subscribe
@@ -166,8 +183,24 @@ public class DeepSeaTrawling extends Plugin
 			return;
 		}
 
-		int objectId = object.getId();
-		ShoalData.shoalSpecies species = ShoalData.shoalSpecies.fromGameObjectId(objectId);
+		GameObject obj = event.getGameObject();
+		if (obj == null || obj.getWorldView() == null) return;
+
+		int id = obj.getId();
+
+		if (isStarboardNetObject(id))
+		{
+			netObjectByIndex[0] = obj;
+			return;
+		}
+
+		if (isPortNetObject(id))
+		{
+			netObjectByIndex[1] = obj;
+			return;
+		}
+
+		ShoalData.shoalSpecies species = ShoalData.shoalSpecies.fromGameObjectId(id);
 		if (species == null) {
 			return;
 		}
@@ -180,8 +213,17 @@ public class DeepSeaTrawling extends Plugin
 
 		shoal.setSpecies(species);
 		shoal.setShoalObject(object);
+		shoal.setDepthFromAnimation();
 
-		log.debug("Shoal worldViewId={} species={} objectId={}", worldViewId, species, objectId);
+		log.debug("Shoal worldViewId={} species={} objectId={}", worldViewId, species, id);
+	}
+
+	public void onGameObjectDespawned(GameObjectDespawned event) {
+		GameObject obj = event.getGameObject();
+		if (obj == null) return;
+
+		if (netObjectByIndex[0] == obj) netObjectByIndex[0] = null;
+		if (netObjectByIndex[1] == obj) netObjectByIndex[1] = null;
 	}
 
 	@Subscribe
@@ -191,35 +233,9 @@ public class DeepSeaTrawling extends Plugin
 		if (shoal == null) {
 			return;
 		}
+		shoal.setDepthFromAnimation();
 
-		WorldEntity entity = shoal.getWorldEntity();
-
-		LocalPoint current = entity.getLocalLocation();
-		LocalPoint next = entity.getTargetLocation();
-
-		shoal.setCurrent(current);
-		shoal.setNext(next);
-
-		WorldPoint currentWorldPoint = WorldPoint.fromLocalInstance(client, current);
-		WorldPoint last = shoal.getLast();
-
-		boolean isMoving = (current != null && next != null && !current.equals(next));
-
-/*		if (shoal.getDepth() == ShoalData.shoalDepth.UNKNOWN && shoal.getPossibleDepths().contains(ShoalData.shoalDepth.MEDIUM)) {
-			shoal.setDepth(ShoalData.shoalDepth.MEDIUM);
-		} else if (shoal.getDepth() == ShoalData.shoalDepth.UNKNOWN && !isMoving && shoal.getWasMoving() && shoal.getPossibleDepths().contains(ShoalData.shoalDepth.SHALLOW) && !shoal.getPossibleDepths().contains(ShoalData.shoalDepth.DEEP)) {
-			shoal.setDepth(ShoalData.shoalDepth.SHALLOW);
-		}*/
-
-		shoal.setWasMoving(isMoving);
-		shoal.setLast(currentWorldPoint);
-
-		if (player!= null) {
-			log.debug("player interacting={}"+ player.getInteracting());
-		}
-		player = client.getLocalPlayer();
-
-
+		shoal.setCurrent(shoal.getWorldEntity().getLocalLocation());
 	}
 
 	@Subscribe
@@ -227,18 +243,29 @@ public class DeepSeaTrawling extends Plugin
 	{
 		String msg = event.getMessage().replaceAll("<[^>]*>","");
 		ChatMessageType type = event.getType();
+		String substring = "";
 
-		if (type != ChatMessageType.GAMEMESSAGE && type != ChatMessageType.SPAM)
+		if (type == ChatMessageType.GAMEMESSAGE || type == ChatMessageType.SPAM)
 		{
-			return;
-		}
+			if (msg.equals("You empty the nets into the cargo hold.")) {
+				fishQuantity = 0;
+				log.debug("Emptied nets");
+			}
 
-		if (msg.startsWith("The nearby ")) {
-			handleShoalSwimsMessage(msg);
-		} else if (msg.contains(" net is too deep to catch fish ") || msg.contains(" net is not deep enough to catch fish ")) {
-			handleDepthMismatchMessage(msg);
-		} else if (msg.startsWith("Your net has no more space for any ")) {
-			netFull = true;
+			if (msg.contains("You catch ") && !msg.contains("Trawler's Trust"))
+			{
+				int index = "You catch ".length();
+				substring = msg.substring(index, msg.indexOf(" ", index + 1));
+			} else if (msg.contains(" catches ")) {
+				int index = msg.indexOf(" catches ") + " catches ".length();
+				substring = msg.substring(index, msg.indexOf(" ", index + 1));
+			}
+
+			if (!substring.equals(""))
+			{
+				fishQuantity += convertToNumber(substring);
+			}
+
 		}
 	}
 
@@ -248,38 +275,15 @@ public class DeepSeaTrawling extends Plugin
 	{
 		int changed = e.getVarbitId();
 
-		for (Map.Entry<Integer, Integer> entry : CREW_VARBITS.entrySet())
+		switch (changed)
 		{
-			int slotVarb = entry.getKey();
-			int positionVarb = entry.getValue();
 
-			if (changed == slotVarb || changed == positionVarb)
-			{
-				loadSingle(slotVarb, positionVarb);
-				return;
-			}
-		}
-
-		CrewAssignments assignment = crewBySlot.computeIfAbsent(-1, k -> new CrewAssignments());
-
-		if (changed == VarbitID.SAILING_FACILITY_HOTSPOT_NUMBER)
-		{
-			assignment.setSlotVarbitId(-1);
-			assignment.setUniqueId(-1);
-			assignment.setPlayer(true);
-			assignment.setName(client.getLocalPlayer().getName());
-
-			switch(client.getVarbitValue(VarbitID.SAILING_FACILITY_HOTSPOT_NUMBER)) {
-				case PLAYER_HOTSPOT_NET_PORT:
-					assignment.setAssignment(PLAYER_HOTSPOT_NET_PORT);
-					break;
-				case PLAYER_HOTSPOT_NET_STARBOARD:
-					assignment.setAssignment(PLAYER_HOTSPOT_NET_STARBOARD);
-					break;
-				default:
-					assignment.setAssignment(-1);
-					break;
-			}
+			case VarbitID.SAILING_SIDEPANEL_BOAT_TRAWLING_NET_0_DEPTH:
+				netList[0].setNetDepth(e.getValue());
+				break;
+			case VarbitID.SAILING_SIDEPANEL_BOAT_TRAWLING_NET_1_DEPTH:
+				netList[1].setNetDepth(e.getValue());
+				break;
 		}
 
 	}
@@ -290,40 +294,6 @@ public class DeepSeaTrawling extends Plugin
 		int dy = a.getY() - b.getY();
 		return dx * dx + dy * dy;
 	}
-/*
-	public void dumpPathsToLog()
-	{
-		for (ShoalData shoal : trackedShoals.values())
-		{
-			StringBuilder builder = new StringBuilder();
-			builder.append("Shoal wv=").append(shoal.getWorldViewId()).append(" species=").append(shoal.getSpecies()).append(" path=[");
-
-			boolean first = true;
-			for (WorldPoint worldPoint : shoal.getPathPoints())
-			{
-				if (!first)
-				{
-					builder.append(";");
-				}
-				first = false;
-				builder.append(worldPoint.getX()).append(",").append(worldPoint.getY());
-			}
-			builder.append("] stops=[");
-			first = true;
-			for (WorldPoint worldPoint : shoal.getStopPoints())
-			{
-				if (!first) {
-					builder.append(";");
-				}
-				first = false;
-				builder.append(worldPoint.getX()).append(",").append(worldPoint.getY());
-			}
-
-			log.info(builder.toString());
-		}
-	}
-
- */
 
 	private void rebuildTrackedShoals() {
 		trackedShoals.clear();
@@ -366,233 +336,62 @@ public class DeepSeaTrawling extends Plugin
 		rebuildTrackedShoals();
 	}
 
-	private void handleShoalSwimsMessage(String msg)
+	private static final Map<String, Integer> WORD_NUMBERS = Map.of(
+			"a", 1,
+			"two", 2,
+			"three", 3,
+			"four", 4,
+			"five", 5,
+			"six", 6,
+			"seven", 7,
+			"eight", 8,
+			"nine", 9,
+			"ten", 10
+	);
+
+	private int convertToNumber(String s)
 	{
-		ShoalData shoal = getNearestShoal();
-		if (shoal == null) {
-			return;
-		}
+		s = s.toLowerCase();
 
-		if (msg.contains(" closer to the surface"))
+		Integer v = WORD_NUMBERS.get(s);
+		if (v != null)
 		{
-			adjustShoalDepthRelative(shoal, -1);
-
-		} else if (msg.contains(" deeper into the depths")) {
-			adjustShoalDepthRelative(shoal, 1);
+			return v;
 		}
+
+		throw new IllegalArgumentException("Unknown quantity: " + s);
 	}
 
-	private void handleDepthMismatchMessage(String msg)
+	private boolean isNetObject(int objectId)
 	{
-		ShoalData shoal = getNearestShoal();
-		if (shoal == null) {
-			return;
-		}
-
-		boolean tooShallow = msg.contains("not deep enough");
-		boolean tooDeep = msg.contains("too deep");
-
-		String operatorName;
-
-		if(msg.startsWith("Your net"))
+		for (NetTiers tier : NetTiers.values())
 		{
-			operatorName = client.getLocalPlayer().getName();
-		} else {
-			int index = msg.indexOf("'s net");
-			if (index <= 0) {
-				return;
-			}
-			operatorName = msg.substring(0, index);
-		}
-
-		int netDepth = getNetDepth(operatorName);
-		if (netDepth < 0)
-		{
-			log.debug("DepthMismatch: couldn't resolve net depth for '{}'", operatorName);
-			return;
-		}
-		if (shoal.getPossibleDepths() == null || shoal.getPossibleDepths().isEmpty())
-		{
-			shoal.setPossibleDepths(shoal.getSpecies().allowedDepths());
-		}
-		EnumSet<ShoalData.shoalDepth> allowed = shoal.getPossibleDepths();
-		EnumSet<ShoalData.shoalDepth> filtered = EnumSet.noneOf(ShoalData.shoalDepth.class);
-
-		for (ShoalData.shoalDepth depth : allowed)
-		{
-			int shoalDepthIndex = ShoalData.shoalDepth.asInt(depth);
-			if (tooShallow && shoalDepthIndex > netDepth)
+			if (ArrayUtils.contains(tier.getGameObjectIds(), objectId))
 			{
-				filtered.add(depth);
-			} else if (tooDeep && shoalDepthIndex < netDepth)
-			{
-				filtered.add(depth);
+				return true;
 			}
 		}
-
-		if (!filtered.isEmpty())
-		{
-			shoal.setPossibleDepths(filtered);
-			if(filtered.size() == 1)
-			{
-				shoal.setDepth(filtered.iterator().next());
-			}
-		}
-
-		log.debug(
-				"DepthMismatch: operator='{}' netDepth={} tooShallow={} tooDeep={} -> possible={}",
-				operatorName, netDepth, tooShallow, tooDeep, shoal.getPossibleDepths()
-		);
-
+		return false;
 	}
 
-	private int getNetDepth(String operatorName) {
-		CrewAssignments operator = findByName(operatorName);
-		if (operator == null)
-		{
-			return -1;
-		}
-
-		int netIndex = operator.getNetIndex();
-		if (netIndex < 0)
-		{
-			return -1;
-		}
-
-		int depthVarbit = (netIndex == 0)
-				? VarbitID.SAILING_SIDEPANEL_BOAT_TRAWLING_NET_0_DEPTH
-				: VarbitID.SAILING_SIDEPANEL_BOAT_TRAWLING_NET_1_DEPTH;
-
-		return client.getVarbitValue(depthVarbit);
-	}
-
-	public int getNetDepthByIndex(int netIndex)
+	public boolean isPortNetObject(int objectId)
 	{
-		switch (netIndex)
-		{
-			case 0:
-				return client.getVarbitValue(VarbitID.SAILING_SIDEPANEL_BOAT_TRAWLING_NET_0_DEPTH);
-			case 1:
-				return client.getVarbitValue(VarbitID.SAILING_SIDEPANEL_BOAT_TRAWLING_NET_1_DEPTH);
-			default:
-				return -1;
-		}
+		return objectId == net.runelite.api.gameval.ObjectID.SAILING_ROPE_TRAWLING_NET_3X8_PORT
+				|| objectId == net.runelite.api.gameval.ObjectID.SAILING_LINEN_TRAWLING_NET_3X8_PORT
+				|| objectId == net.runelite.api.gameval.ObjectID.SAILING_HEMP_TRAWLING_NET_3X8_PORT
+				|| objectId == net.runelite.api.gameval.ObjectID.SAILING_COTTON_TRAWLING_NET_3X8_PORT;
 	}
 
-	private CrewAssignments findByName(String operatorName)
+	public boolean isStarboardNetObject(int objectId)
 	{
-		for (CrewAssignments assignment : crewBySlot.values())
-		{
-			if (assignment.getName() != null && assignment.getName().equalsIgnoreCase(operatorName))
-			{
-				return assignment;
-			}
-		}
-		return null;
+		return objectId == net.runelite.api.gameval.ObjectID.SAILING_ROPE_TRAWLING_NET_3X8_STARBOARD
+				|| objectId == net.runelite.api.gameval.ObjectID.SAILING_LINEN_TRAWLING_NET_3X8_STARBOARD
+				|| objectId == net.runelite.api.gameval.ObjectID.SAILING_HEMP_TRAWLING_NET_3X8_STARBOARD
+				|| objectId == net.runelite.api.gameval.ObjectID.SAILING_COTTON_TRAWLING_NET_3X8_STARBOARD
+				|| objectId == net.runelite.api.gameval.ObjectID.SAILING_ROPE_TRAWLING_NET
+				|| objectId == net.runelite.api.gameval.ObjectID.SAILING_LINEN_TRAWLING_NET
+				|| objectId == net.runelite.api.gameval.ObjectID.SAILING_HEMP_TRAWLING_NET
+				|| objectId == ObjectID.SAILING_COTTON_TRAWLING_NET;
 	}
-
-	private void adjustShoalDepthRelative(ShoalData shoal, int delta)
-	{
-		if (shoal.getDepth() == ShoalData.shoalDepth.UNKNOWN)
-		{
-			EnumSet<ShoalData.shoalDepth> allowed = shoal.getSpecies().allowedDepths();
-			EnumSet<ShoalData.shoalDepth> shifted = EnumSet.noneOf(ShoalData.shoalDepth.class);
-
-			for (ShoalData.shoalDepth depth : allowed)
-			{
-				int index = ShoalData.shoalDepth.asInt(depth) + delta;
-				for (ShoalData.shoalDepth candidate : allowed)
-				{
-					if (ShoalData.shoalDepth.asInt(candidate) == index)
-					{
-						shifted.add(candidate);
-					}
-				}
-			}
-
-			if (!shifted.isEmpty())
-			{
-				shoal.getPossibleDepths().retainAll(shifted);
-				if (shoal.getPossibleDepths().size() == 1)
-				{
-					shoal.setDepth(shoal.getPossibleDepths().iterator().next());
-				}
-			}
-			return;
-		}
-
-		shoal.setPossibleDepths(shoal.getSpecies().allowedDepths());
-
-		int currentDepth = ShoalData.shoalDepth.asInt(shoal.getDepth());
-		ShoalData.shoalDepth newDepth = ShoalData.shoalDepth.UNKNOWN;
-
-		for (ShoalData.shoalDepth depth : shoal.getSpecies().allowedDepths())
-		{
-			if (ShoalData.shoalDepth.asInt(depth) == currentDepth + delta) {
-				newDepth = depth;
-				break;
-			}
-		}
-
-		log.debug("Shoal Depth={}", newDepth);
-
-		if (newDepth != ShoalData.shoalDepth.UNKNOWN)
-		{
-			shoal.setDepth(newDepth);
-		}
-	}
-
-	private void loadSingle(int slotVarb, int positionVarb)
-	{
-		int crewmateId = client.getVarbitValue(slotVarb);
-		if (crewmateId == 0)
-		{
-			crewBySlot.remove(slotVarb);
-			return;
-		}
-
-		CrewAssignments assignment = crewBySlot.computeIfAbsent(slotVarb, k -> new CrewAssignments());
-		assignment.setSlotVarbitId(slotVarb);
-		assignment.setUniqueId(crewmateId);
-
-		assignment.setAssignment(client.getVarbitValue(positionVarb));
-
-		switch(crewmateId) {
-			case 1:
-				assignment.setName("Jobless Jim");
-				break;
-			case 2:
-				assignment.setName("Adventurer Ada");
-				break;
-			case 3:
-				assignment.setName("Jittery Jim");
-				break;
-			case 4:
-				assignment.setName("Jolly Jim");
-				break;
-			case 5:
-				assignment.setName("Sailor Jakob");
-				break;
-			case 6:
-				assignment.setName("Oarswoman Olga");
-				break;
-			case 7:
-				assignment.setName("Bosun Zarah");
-				break;
-			case 8:
-				assignment.setName("Spotter Virginia");
-				break;
-			case 9:
-				assignment.setName("Ex-Captain Siad");
-				break;
-			case 10:
-				assignment.setName("Cabin Boy Jenkins");
-				break;
-			default:
-				break;
-		}
-	}
-
-
 
 }
