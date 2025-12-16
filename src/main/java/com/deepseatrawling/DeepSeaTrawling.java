@@ -276,7 +276,7 @@ public class DeepSeaTrawling extends Plugin
 				log.debug("Emptied net");
 			}
 
-			if (msg.contains("Trawler's Trust")) {
+			if (msg.contains("Trawler's trust")) {
 				// Another message includes the additional fish caught
 				return;
 			}
