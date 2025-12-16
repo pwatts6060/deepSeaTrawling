@@ -90,7 +90,14 @@ public class DeepSeaTrawlingWidgetOverlay extends Overlay {
             if (childId == -1) continue;
 
             Widget button = parent.getChild(childId);
-            if (button == null || button.isHidden() || button.getBounds().width <=0 || button.getBounds().height <= 0 || hidden || !client.getWidget(161,73).getBounds().intersects(button.getBounds())) continue;
+            if (button == null || button.isHidden() || button.getBounds().width <= 0 || button.getBounds().height <= 0 || hidden) {
+				continue;
+			}
+
+			Widget widget = client.getWidget(161,73);
+			if (widget != null && !widget.getBounds().intersects(button.getBounds())) {
+				continue;
+			}
 
             Rectangle bounds = button.getBounds();
             if (bounds == null) continue;
