@@ -264,12 +264,11 @@ public class DeepSeaTrawling extends Plugin
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
 	{
-		String msg = event.getMessage().replaceAll("<[^>]*>","");
 		ChatMessageType type = event.getType();
-		String substring = "";
-
 		if (type == ChatMessageType.GAMEMESSAGE || type == ChatMessageType.SPAM)
 		{
+			String msg = event.getMessage().replaceAll("<[^>]*>","");
+			String substring = "";
 			if (msg.equals("You empty the nets into the cargo hold.")) {
 				fishQuantity = 0;
 				log.debug("Emptied nets");
